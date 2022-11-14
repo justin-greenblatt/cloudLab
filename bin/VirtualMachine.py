@@ -1,44 +1,34 @@
 import argparse
 import os
 import time
-
-# pip install google-api-python-client
 import googleapiclient.discovery
 from six.moves import input
 
-compute = googleapiclient.discovery.build('compute', 'v1')
-
-
-# [START list_instances]
-def list_instances(compute, project, zone):
-    result = compute.instances().list(project=project, zone=zone).execute()
-    return result['items'] if 'items' in result else None
-# [END list_instances]
 
 class VirtualMachine:
-    def __init__(self, computeService, config : str):
-        self.name = config["name"]
-        #startup_script = open(os.path.join(config["startup_script"], 'r').read()
-        self.project = config["project"]
-        self.zone = config["zone"]
+
+    def __init__(self, computeService, name, vmConfig):
+
+        self.name = name
+        self.compute = computeService
+        self.project = vmConfig["general"]["project"]
+        self.zone = vmConfig["general"]["zone"]
+        if vmConfig["vm"].get("startupConfig", False):
+            self.startup_script = open(os.path.join(vmConfig["vm"]["startup_script"], 'r')).read()
+        else:
+            self.startup_script = False
+        self.project = vmConfig["general"]["project"]
+        self.zone = vmConfig["general"]["zone"]
         self.createConfig = {
             'name': self.name,
-            'machineType': config["machine"],
+            'machineType': vmConfig["vm"]["machine"],
             'disks': [
                 {
                     'boot': True,
                     'autoDelete': True,
                     'initializeParams': {
-                    'sourceImage': config["os_image"]#"projects/debian-cloud/global/images/debian-11-bullseye-v20220920",
-                    }   
-                },
-                {
-                    'boot': False,
-                    'autoDelete': True,
-                    'initializeParams': {
-                        'sizeGb': config["disk_size"]
-
-                    }
+                    'sourceImage': vmConfig["vm"]["os_image"]
+                    } 
                 }
             ],
 
@@ -55,15 +45,14 @@ class VirtualMachine:
                     'https://www.googleapis.com/auth/devstorage.read_write',
                     'https://www.googleapis.com/auth/logging.write'
                 ]
-            }]#,
-
-       # 'metadata': {
-       #      'items': [{
-       #          'key': 'startup-script',
-       #          'value': startup_script
-       #      }]
-       # }
+            }]
         }
+        if self.startup_script:
+             self.createConfig["metadata"] = {'items': [{'key': 'startup-script','value': self.startup_script}]}
+        
+    def listInstances(self):
+        result = self.compute.instances().list(project=self.project, zone=self.zone).execute()
+        return result['items'] if 'items' in result else None
 
     def create(self):
         return self.compute.instances().insert(
